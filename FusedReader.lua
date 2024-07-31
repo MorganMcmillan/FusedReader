@@ -96,7 +96,7 @@ FusedReader.pushStreams = FusedReader.addStreams
 --- Creates a new reader from multiple streams.
 ---@param ... Stream|Stream[]
 ---@return FusedReader
-function FusedReader.FromStreams(...)
+function FusedReader.fromStreams(...)
   local reader = FusedReader.new()
   reader:addStreams(...)
   return reader
@@ -152,20 +152,25 @@ function FusedReader:read(...)
     return self:readLine()
   end
 
+  local outputs = {}
+
   for i=1,#readModes do
     local readMode = readModes[i]
+    print("readmode:", readMode)
     if type(readMode) == "number" then
-      return self:readBytes(readMode)
+      outputs[#outputs + 1] = self:readBytes(readMode)
     elseif readMode == "n" then
-      return self:readNumber()
+      outputs[#outputs + 1] = self:readNumber()
     elseif readMode == "a" then
-      return self:readAll()
+      outputs[#outputs + 1] = self:readAll()
     elseif readMode == "l" then
-      return self:readLine()
+      outputs[#outputs + 1] = self:readLine()
     elseif readMode == "L" then
-      return self:readLine(true)
+      outputs[#outputs + 1] = self:readLine(true)
     end
   end
+
+  return unpack(outputs)
 end
 
 --- Reads characters that match a patter
@@ -256,5 +261,7 @@ function FusedReader:readLine(keepEOL)
   if self:isCurrentEOF() then self:nextStream() end
   return line
 end
+
+--TODO: add `seek`
 
 return FusedReader

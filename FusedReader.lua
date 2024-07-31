@@ -107,13 +107,12 @@ function FusedReader.fromPathsRaw(...)
   local reader = FusedReader.new()
   local paths = {...}
   for i=1,#paths do
-    local path = paths[i]
-    reader:addStreams(assert(io.open(path, "rb")))
+    reader:addStream(assert(io.open(paths[i], "rb")))
   end
 end
 
 function FusedReader:nextStream()
-  self.currentStream.close()
+  if self.currentStream then self.currentStream:close() end
   local index = self.currentIndex + 1
   self.currentStream = self.streams[index]
   self.currentSize = self.sizes[index]
@@ -134,13 +133,14 @@ end
 --- Closes the reader and all underlying streams.
 function FusedReader:close()
   for i=1,#self.streams do
-    self.streams[i]:close()
+    local stream = self.streams[i]
+    pcall(stream.close,stream)
   end
 end
 
 --- Reads from the current stream.
 ---@param ... "n"|"a"|"l"|"L"|integer
----@return ... string|nil
+---@return ... string|number|nil
 function FusedReader:read(...)
   local readModes = {...}
 

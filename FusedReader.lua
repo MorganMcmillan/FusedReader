@@ -1,3 +1,5 @@
+local concat,setmetatable,getmetatable = table.concat,setmetatable,getmetatable
+
 ---@class FusedReader
 ---@field streams Stream[]
 ---@field sizes integer[]
@@ -109,6 +111,7 @@ function FusedReader.fromPathsRaw(...)
   for i=1,#paths do
     reader:addStream(assert(io.open(paths[i], "rb")))
   end
+  return reader
 end
 
 function FusedReader:nextStream()
@@ -142,6 +145,7 @@ end
 ---@param ... "n"|"a"|"l"|"L"|integer
 ---@return ... string|number|nil
 function FusedReader:read(...)
+  if not self.currentStream then return end
   local readModes = {...}
 
   if #readModes == 0 then
@@ -152,6 +156,8 @@ function FusedReader:read(...)
     local readMode = readModes[i]
     if type(readMode) == "number" then
       return self:readBytes(readMode)
+    elseif readMode == "n" then
+      return self:readNumber()
     elseif readMode == "a" then
       return self:readAll()
     elseif readMode == "l" then
@@ -162,18 +168,77 @@ function FusedReader:read(...)
   end
 end
 
-function FusedReader:readBytes(count)
+--- Reads characters that match a patter
+---@param pat string|function
+---@return string|nil
+function FusedReader:readWhile(pat)
+  if not self.currentStream then return end
   local buffer = {}
-  local bytes = ""
-  while #bytes < count do
-    bytes = bytes .. (self.currentStream:read(count) or "")
+  local char
+  if type(pat) == "string" then
+    while true do
+      char = self:readBytes(1)
+      if not char then break end
+      if char:match(pat) then
+        buffer[#buffer + 1] = char
+      else
+        break
+      end
+    end
+  else
+    while true do
+      char = self:readBytes(1)
+      if not char then break end
+      if pat(char) then
+        buffer[#buffer + 1] = char
+      else
+        break
+      end
+    end
+  end
+  if #buffer == 0 then return end
+  return concat(buffer)
+end
+
+function FusedReader:readBytes(count)
+  if not self.currentStream then return end
+  local buffer = {}
+  while count > 0 do
+    local bytes = self.currentStream:read(count) or ""
+    count = count - #bytes
+    buffer[#buffer + 1] = bytes
     if self:isCurrentEOF() then self:nextStream() end
     if self:isFinished() then break end
   end
-  return bytes
+  return concat(buffer)
+end
+
+--- Reads a number from the current stream.
+--- The number can be in hex, octal, or binary, depending on it's prefix.
+--- Returns nil if no number could be read.
+---@return number|nil
+function FusedReader:readNumber()
+  if not self.currentStream then return end
+  local buf = self:readBytes(1)
+  if buf == "0" then
+    local prefix = self:readBytes(1)
+    if prefix == "x" or prefix == "X" then
+      local hex = self:readWhile("%x")
+      return hex and tonumber(hex, 16)
+    elseif prefix == "o" or prefix == "O" then
+      local oct = self:readWhile("[0-7]")
+      return oct and tonumber(oct, 8)
+    elseif prefix == "b" or prefix == "B" then
+      local bin = self:readWhile("[01]")
+      return bin and tonumber(bin, 2)
+    end
+  elseif tonumber(buf) then
+    return tonumber(buf .. (self:readWhile("[0-9]") or ""))
+  end
 end
 
 function FusedReader:readAll()
+  if not self.currentStream then return end
   local buffer = {}
   while not self:isFinished() do
     local text = self.currentStream:read("a")
@@ -182,10 +247,11 @@ function FusedReader:readAll()
     end
     self:nextStream()
   end
-  return table.concat(buffer,"\n")
+  return concat(buffer)
 end
 
 function FusedReader:readLine(keepEOL)
+  if not self.currentStream then return end
   local line = self.currentStream:read(keepEOL and "L" or "l")
   if self:isCurrentEOF() then self:nextStream() end
   return line

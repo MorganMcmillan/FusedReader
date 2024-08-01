@@ -139,6 +139,11 @@ function FusedReader:close()
     local stream = self.streams[i]
     pcall(stream.close,stream)
   end
+  self.streams = {}
+  self.sizes = {}
+  self.currentStream = nil
+  self.currentSize = 0
+  self.currentIndex = 0
 end
 
 --- Reads from the current stream.
@@ -156,7 +161,6 @@ function FusedReader:read(...)
 
   for i=1,#readModes do
     local readMode = readModes[i]
-    print("readmode:", readMode)
     if type(readMode) == "number" then
       outputs[#outputs + 1] = self:readBytes(readMode)
     elseif readMode == "n" then

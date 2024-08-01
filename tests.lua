@@ -15,11 +15,33 @@ x.run{
     x.assertEq(fused:readAll(), "Hello world!")
     fused:close()
   end,
-  "Parsing numbers",
+  "Parsing hex numbers",
   function()
     local f = x.file("num.txt","0xfeed")
-    local num = f:read"*n"
+    local num = f:read"n"
     x.assertEq(num, 0xfeed)
-    f:close()
-  end
+    f:seek("set")
+    local fused = FusedReader.fromStreams(f)
+    num = fused:read"n"
+    x.assertEq(num, 0xfeed)
+    fused:close()
+    fused:addStreams(x.file("num1","0xfe"), x.file("num2","ed"))
+    x.assertEq(num, 0xfeed)
+    fused:close()
+  end,
+  "Parsing decimal numbers",
+  function()
+    local f = x.file("num.txt","420")
+    local num = f:read"n"
+    x.assertEq(num, 420)
+    f:seek("set")
+    local fused = FusedReader.fromStreams(f)
+    num = fused:read"n"
+    x.assertEq(num, 420)
+    fused:close()
+    fused = FusedReader.fromStreams(x.file("num1","420"), x.file("num2","69"), x.file("num3","666"))
+    num = fused:read"n"
+    x.assertEq(num, 42069666)
+    fused:close()
+  end,
 }
